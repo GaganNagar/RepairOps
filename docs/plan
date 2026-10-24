@@ -1,0 +1,230 @@
+FIXFLOW IMPLEMENTATION GUIDE — SIMPLE HINGLISH
+=======================================================
+
+FIXFLOW IMPLEMENTATION GUIDE
+Simple Hinglish version
+
+IS DOCUMENT KA PURPOSE
+Ye coding nahi hai. Ye ek task-by-task plan hai jo batata hai ki FixFlow backend banate waqt pehle kya karna hai, uske baad kya, kaun si files badalengi, aur task complete kaise verify hoga.
+
+KAISE USE KARNA HAI
+Ek waqt par sirf ek task uthao. Uske prerequisites pehle complete hone chahiye. Task khud implement karne ki koshish karo; jahan atko, AI agent se sirf usi task par help lo. Code review aur tests pass hone ke baad hi status Completed karo.
+
+STATUS KA MATLAB
+Not Started = abhi shuru nahi hua. In Progress = kaam chal raha hai. Blocked = kisi decision ya dependency ki wajah se rukha hai. Completed = implementation aur verification sach mein ho chuki hai.
+
+PROJECT KI CURRENT POSITION
+Checklist ke mutabik basic Express server, health endpoint aur 404/error handling setup ho chuka bataya gaya hai. MongoDB connection, models, authentication, repair APIs, automated tests, API documentation aur deployment abhi baaki hain. Repository/Git initialization bhi checklist ke mutabik unchecked hai. Apne actual files aur test output se status confirm karna.
+
+PHASE 0 — Initial setup
+-----------------------
+
+SETUP-01 — Basic backend setup
+Maqsad: Express server chalna chahiye aur local secrets Git mein upload nahi hone chahiye.
+Kaam: package scripts/dependencies, app.js aur server.js ka separation, dotenv, GET /health, JSON parsing, 404/error response, .gitignore aur .env.example verify karo. Is task mein MongoDB connect nahi karna.
+Test: npm run dev chalao; /health par 200 JSON aur unknown route par 404 JSON check karo; server band karo; confirm karo .env aur node_modules ignored hain.
+Status in checklist: Completed (reported; actual repo mein dobara verify karna).
+
+PHASE 1 — Shared infrastructure and testing foundation
+------------------------------------------------------
+
+DB-01 — Database configuration decide karna
+Maqsad: MongoDB connection string environment variable ka naam aur missing configuration par server ka behavior decide karna.
+Kaam: .env.example mein sirf placeholder rakho; real credentials sirf local ignored .env mein. Provider choose karna is task ka part nahi.
+Test: .env aur .env.example check karo; tracked file mein real secret na ho.
+Status: Not Started. Decision chahiye: variable ka exact naam aur invalid/missing value par behavior.
+
+DB-02 — MongoDB connect karna
+Maqsad: Database connect hone ke baad hi server requests serve kare.
+Kaam: Mongoose connection code, environment validation, startup failure logging aur clean shutdown. Abhi models ya business logic mat banao.
+Test: valid database par start karo; missing config aur unreachable database par startup fail hota hai ya nahi check karo; shutdown clean hona chahiye.
+Status: Not Started. Decision chahiye: /health sirf server alive batayega ya database readiness bhi.
+
+ERR-01 — Standard error response
+Maqsad: API errors har jagah consistent hon aur internal details/stack trace user ko na mile.
+Kaam: centralized error handler ko API contract ke response format ke saath align karo; validation, auth, permission, not-found, conflict aur unexpected errors ke status decide karo.
+Test: unknown route, malformed JSON aur unexpected error test karo; response mein stack trace/secrets nahi hone chahiye.
+Status: Not Started. Decision chahiye: error JSON ka final format aur validation ke liye HTTP 400 ya 422.
+
+VAL-01 — Request validation
+Maqsad: Galat input business logic ya database tak pahunchne se pehle reject ho.
+Kaam: validation library/approach select karo; request body aur route params validate karo; protected fields ko accept mat karo.
+Test: invalid input reject ho; valid input hi controller/service tak pahuche.
+Status: Not Started. Decision chahiye: kaunsi validation library/schema style use hogi.
+
+TEST-01 — Automated testing setup
+Maqsad: Har feature ko repeatable tests se verify karna, sirf manually check nahi karna.
+Kaam: test runner select karo, npm test command set karo aur safe test database strategy decide karo. Production database ko tests mein use mat karna.
+Test: ek test command successfully run ho aur failure hone par non-zero exit code de.
+Status: Not Started. Decision chahiye: test runner aur integration-test database approach.
+
+PHASE 2 — Users and authentication
+----------------------------------
+
+USER-01 — User model
+Maqsad: User ka naam, email, password hash, role aur active status database mein safely store karna.
+Kaam: Mongoose schema, timestamps, normalized/unique email, role enum aur password hash ko normal response se hide karna.
+Test: invalid role/required fields reject hon; duplicate email handle ho; password hash normal response mein na aaye.
+Status: Not Started.
+
+AUTH-01 — Customer registration
+Maqsad: Customer apna account create kar sake.
+Kaam: POST /api/v1/auth/register, input validation, email normalization, password hashing, safe response aur duplicate email handling.
+Security: public user kabhi request body mein role=admin/technician bhej kar privileged account create na kar sake; backend role customer set kare.
+Test: valid registration, duplicate email, invalid input aur role-escalation attempts test karo. Status: Not Started.
+
+AUTH-02 — Login and access token
+Maqsad: Registered user credentials verify karke access token issue karna.
+Kaam: POST /api/v1/auth/login, password hash compare, inactive account reject aur safe token response.
+Test: correct password, wrong password, unknown email aur inactive account. Error response se ye leak nahi hona chahiye ki email registered hai ya nahi.
+Status: Not Started. Decision chahiye: access-token expiry, signing method/library, secret/key config aur token claims.
+
+AUTH-03 — Authenticate requests / current user
+Maqsad: Token verify karke pata lagana ki request kis user ki hai.
+Kaam: authentication middleware aur GET /api/v1/auth/me. Missing/invalid/expired token ko reject karo; safe profile return karo.
+Test: valid, missing, malformed, expired aur invalid token ke cases.
+Status: Not Started.
+
+AUTH-04 — Role authorization
+Maqsad: Customer, technician aur admin sirf allowed actions kar saken.
+Kaam: reusable authorization middleware; unauthenticated user ke liye 401, logged-in but unauthorized role ke liye 403.
+Test: har role ke allowed aur blocked endpoints verify karo. Client-side checks ko security ka replacement mat samjho.
+Status: Not Started.
+
+SESS-01 — Refresh session model
+Maqsad: Refresh sessions ko revoke/expire kar pana, raw refresh token database mein save kiye bina.
+Kaam: session model, user reference, tokenHash, expiry/revocation fields aur TTL cleanup index; application ko expiry khud bhi verify karni hogi.
+Test: stored value hash ho, raw token nahi; expiry aur revocation ka behavior verify karo.
+Status: Not Started. Decision chahiye: refresh lifetime, rotation, reuse detection aur concurrent-session policy.
+
+SESS-02 — Refresh token endpoint
+Maqsad: Valid refresh credential se naya access token aur policy ke mutabik naya refresh token issue karna.
+Kaam: POST /api/v1/auth/refresh; expiry/revocation/rotation/reuse policy implement karo.
+Test: valid refresh, expired/revoked token, old token reuse aur concurrency policy.
+Status: Not Started; SESS-01 ke decisions par depend karta hai.
+
+SESS-03 — Logout
+Maqsad: Logout par sahi refresh session revoke ho.
+Kaam: POST /api/v1/auth/logout; user kisi aur ka session revoke na kar sake.
+Test: logout ke baad refresh fail ho; doosre user ka session revoke karne ki koshish reject ho.
+Status: Not Started. Decision chahiye: sirf current session logout hoga ya all sessions.
+
+PHASE 3 — Repair model and basic APIs
+-------------------------------------
+
+REP-01 — Repair lifecycle decisions
+Maqsad: Repair request ke statuses aur estimate approval/rejection ka ek clear design banana.
+Kaam: decide karo APPROVED/REJECTED repair status honge ya estimate response metadata; cancellation allowed states; rejected estimate revise ho sakta hai ya request close hogi; admin override/audit rules.
+Test: har actor action aur status transition ko ek consistent table mein review karo; runtime code abhi nahi.
+Status: Not Started. Ye decisions repair schema banane se pehle resolve karo.
+
+REP-02 — Repair model and transition logic
+Maqsad: Repair request database mein save ho aur status sirf allowed sequence mein change ho.
+Kaam: customer/technician references, device details, status, estimate, status history aur timestamps; service-level transition rules.
+Test: invalid status/transition reject ho; status change aur history match karein; references valid hon.
+Status: Not Started. Device types aur text field limits decide karni hain.
+
+REP-03 — Customer repair request create kare
+Maqsad: Logged-in customer repair request submit kar sake.
+Kaam: POST /api/v1/repairs; customer ID authenticated user se lo; initial status backend set kare.
+Security: client ke customerId, technicianId ya status par trust mat karo.
+Test: request create karo; forged IDs/status bhejo; saved owner aur status verify karo. Status: Not Started.
+
+REP-04 — Repairs list/read with access control
+Maqsad: Har user sirf wahi repairs dekh sake jinke liye woh authorized hai.
+Kaam: GET /api/v1/repairs aur GET /api/v1/repairs/:id. Customer ko apne, technician ko assigned, admin ko authorized records dikhein.
+Test: multiple users/roles ke records ke saath list/detail endpoints aur unauthorized IDs test karo.
+Status: Not Started. Decision chahiye: pagination format aur hidden resource ke liye 404 vs 403 policy.
+
+PHASE 4 — Assignment and repair workflow
+----------------------------------------
+
+TECH-01 — Technician account provisioning
+Maqsad: Assignment ke liye eligible technician account create/activate karne ka safe process define karna.
+Kaam: decide karo admin directly account create karega ya invitation flow hoga. Public registration customer-only rahe.
+Test: customer/technician ko unauthorized technician provisioning na karne do.
+Status: Not Started. Decision chahiye: admin-created accounts vs invitations.
+
+REP-05 — Admin technician assign kare
+Maqsad: Admin repair request ko active technician ko assign kar sake.
+Kaam: POST /api/v1/repairs/:id/assign; target user technician role aur active hona chahiye; allowed state mein hi assign ho; history record ho.
+Test: valid assignment, wrong role/inactive technician, non-admin caller aur invalid repair state.
+Status: Not Started.
+
+REP-06 — Technician estimate submit kare
+Maqsad: Assigned technician repair cost estimate submit kar sake.
+Kaam: POST /api/v1/repairs/:id/estimate; amount, INR currency aur notes validate karo; client status set na kar sake.
+Test: assigned vs other technician, invalid amount, wrong state aur repeated/revision attempts.
+Status: Not Started. Decision chahiye: rejected estimate revise ho sakta hai ya nahi, aur field limits.
+
+REP-07 — Customer estimate approve/reject kare
+Maqsad: Sirf repair ka owner pending estimate par decision de.
+Kaam: POST /api/v1/repairs/:id/estimate-response; approve/reject choice validate; owner aur pending-state enforce; status/history consistent rakho.
+Test: owner, non-owner, wrong role, duplicate response aur estimate se pehle response.
+Status: Not Started.
+
+REP-08 — Customer cancellation
+Maqsad: Customer sirf allowed pre-work state mein apni request cancel kar sake.
+Kaam: POST /api/v1/repairs/:id/cancel; ownership aur approved cancellation policy enforce; history record karo.
+Test: allowed aur disallowed states, owner/non-owner, in-progress/completed cancellation.
+Status: Not Started. Decision chahiye: assignment ke baad cancellation aur admin override.
+
+REP-09 — Technician repair start kare
+Maqsad: Assigned technician sirf approved repair start kar sake.
+Kaam: POST /api/v1/repairs/:id/start; only approved state se IN_PROGRESS; history record ho.
+Test: correct technician and approved state; unapproved, cancelled, completed ya different technician cases reject hon.
+Status: Not Started.
+
+REP-10 — Technician repair complete kare
+Maqsad: Assigned technician in-progress repair ko complete kar sake.
+Kaam: POST /api/v1/repairs/:id/complete; only IN_PROGRESS -> COMPLETED; history update ho.
+Test: before-start completion, repeated completion aur wrong technician reject hon.
+Scope: payment/notifications/delivery jaise unrequested features add mat karo. Status: Not Started.
+
+PHASE 5 — Security, tests, documentation, deployment
+----------------------------------------------------
+
+SEC-01 — Security review
+Maqsad: Deployment se pehle saare implemented endpoints ka security audit.
+Check: customer-only registration, password hashing, hashed refresh tokens, role/ownership checks, protected fields, input validation, status transitions, secret/hash/stack-trace leakage, session expiry/revocation, query scoping aur npm audit findings.
+Test: cross-user access, role escalation, token misuse aur error leakage ke regression tests.
+Status: Not Started.
+
+TEST-02 — Full API/lifecycle tests
+Maqsad: End-to-end confirm karna ki documented flow aur error behavior sahi hai.
+Kaam: auth, sessions, roles, ownership, validation, duplicate/conflict actions aur har allowed repair transition test karo. Test data isolated ho; production services use na hon.
+Test: single documented command se test suite run ho; Postman mein register/login se repair complete/cancel tak flow test karo.
+Status: Not Started.
+
+DOC-01 — API documentation
+Maqsad: Developers API ko documentation follow karke use kar saken.
+Kaam: actual methods/paths, auth, roles, request/response examples, status codes, error shape, pagination aur state rules document karo.
+Test: examples ko actual API responses se compare karo; planned behavior ko implemented behavior ke roop mein mat likho.
+Status: Not Started. Decisions chahiye: pagination, error response policy aur Postman collection chahiye ya nahi.
+
+DEPLOY-01 — Hosting target choose karna
+Maqsad: Decide karna ki backend kahan deploy hoga.
+Kaam: ek platform choose karke Node version, env vars, database connectivity aur start command document karo.
+Test: selected platform ke saath project compatibility review karo.
+Status: Not Started. Hosting platform abhi selected nahi.
+
+DEPLOY-02 — Deploy and verify
+Maqsad: Backend ko selected platform par deploy karke real health/API smoke test pass karna.
+Kaam: runtime/start command/secrets configure karo; intended database connect karo; startup/shutdown logs review karo; credentials source/build artifacts mein na hon.
+Test: deployed /health aur safe API flow verify karo; tests deployment se pehle pass hone chahiye.
+Status: Not Started.
+
+IMPORTANT OPEN DECISIONS
+-------------------------
+
+- Repair states: APPROVED/REJECTED ko repair status mein rakhna hai ya estimate response metadata mein? Duplicate information avoid karni hai.
+- Cancellation: Assignment ke baad aur estimate se pehle cancellation allowed hogi? Admin override/audit ka rule kya hoga?
+- Rejected estimate: Reject hone par request close hogi ya technician revised estimate de sakta hai?
+- Field limits: Device type values aur issue description/device fields ki maximum length kya hogi?
+- Technician accounts: Admin directly account banayega/activate karega ya invitation system hoga?
+- Tokens/sessions: Access/refresh expiry, token rotation, reuse detection, logout scope aur concurrent sessions ka rule kya hai?
+- Error format: API errors ka final JSON envelope kya hoga? Validation ke liye 400 ya 422?
+- Testing/validation tools: Kaunsa validation tool aur test runner/database strategy use karni hai?
+- Pagination/deployment: List APIs ka pagination format aur deployment platform kya hoga?
+
+RULE: Ek task at a time. Prerequisites complete karo, implementation review karo, tests run karo, phir status update karo. AI agent ka 'done' kehna akela proof nahi hai.
