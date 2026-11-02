@@ -2,7 +2,7 @@
 
 RepairOps is a modular backend REST API for an electronics repair management system. It provides a structured platform for managing device repair requests (such as laptops, desktops, mobiles, and tablets) through a defined operational lifecycle involving customers, technicians, and administrators.
 
-The application is built as a feature-based modular monolith using Node.js, Express, and MongoDB with Mongoose. It features secure JWT authentication with refresh token rotation, role-based authorization, strict request validation, and auditable repair tracking schemas.
+The application is built as a feature-based modular monolith using Node.js, Express, and MongoDB with Mongoose. It currently implements JWT authentication, customer authorization for repair creation and listing, input validation on authentication and repair creation, and the initial repair-request workflow. Other repair lifecycle actions remain incomplete.
 
 ---
 
@@ -14,12 +14,12 @@ The application is built as a feature-based modular monolith using Node.js, Expr
 - **Secure Refresh Token Rotation**: Stores refresh tokens as SHA-256 hashes in MongoDB sessions to prevent token theft.
 - **HttpOnly Cookie Handling**: Sends refresh tokens via secure, httpOnly cookies with strict SameSite policy.
 - **Session Revocation & Logout**: Database-backed session invalidation and cookie clearing upon logout.
-- **User Profile Retrieval**: Authenticated profile endpoint returning verified identity and role data.
+- **User Profile Retrieval**: Authenticated profile endpoint returning the current user's name, email, and role.
 
 ### Repair Management
 - **Repair Request Creation**: Authenticated customers can submit repair requests with validated device type, brand, model, and issue description.
 - **Strict Input Whitelisting**: Request bodies for repair creation only permit designated fields, rejecting unexpected attributes.
-- **Domain-Specific Schema & Auditing**: Tracks lifecycle status (`REQUESTED`, `ASSIGNED`, `ESTIMATE_PENDING`, `APPROVED`, `REJECTED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`), cost estimates, and status change history with timestamps and user references.
+- **Domain-Specific Schema**: Defines lifecycle statuses (`REQUESTED`, `ASSIGNED`, `ESTIMATE_PENDING`, `APPROVED`, `REJECTED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`), cost estimates, and status-history records. Only initial request creation is currently implemented; lifecycle updates are not.
 - **Lifecycle Route Architecture**: Pre-defined endpoints for technician assignment, estimate submission, customer estimate approval/rejection, repair execution, completion, and cancellation.
 
 ---
@@ -30,9 +30,9 @@ The system defines three user roles in its user model (`customer`, `technician`,
 
 | Role | Implemented Capabilities | Planned / Route Stub Capabilities |
 |---|---|---|
-| **Customer** | • Register account (default role)<br>• Log in and authenticate<br>• Access profile (`/api/auth/get-me`)<br>• Create repair requests (`POST /api/repairs`) | • View own repair requests<br>• Approve or reject repair estimates<br>• Cancel eligible repair requests before work begins |
-| **Technician** | • Log in and authenticate<br>• Access profile | • View assigned repair requests<br>• Submit cost estimates (`amount`, notes)<br>• Transition repairs to `IN_PROGRESS`<br>• Mark repairs as `COMPLETED` |
-| **Admin** | • Log in and authenticate<br>• Access profile | • View all repair requests across the system<br>• Assign qualified technicians to repair requests (`POST /api/repairs/:id/assign`) |
+| `GET` | `/api/auth/get-me` | Bearer access token | Fetches current user profile (`name`, `email`, `role`) | Implemented |
+| **Technician** | • Log in and authenticate<br>• Access profile | • View assigned repair requests<br>• Submit cost estimates<br>• Transition repairs to `IN_PROGRESS`<br>• Mark repairs as `COMPLETED` |
+| **Admin** | • Log in and authenticate<br>• Access profile | • View all repair requests across the system<br>• Assign qualified technicians to repair requests |
 
 > **Note on Role Assignment:** Public registration strictly forces the `customer` role. Admin and technician roles cannot be selected or escalated via registration payloads.
 
@@ -63,7 +63,7 @@ The system defines three user roles in its user model (`customer`, `technician`,
 
 ## Application Workflow
 
-The repair management lifecycle is modeled through discrete operational stages:
+The intended repair management lifecycle is modeled through discrete operational stages. Currently, only customer request creation is implemented; subsequent actions are planned:
 
 ```
 [Customer] Submits Request (REQUESTED)
@@ -88,12 +88,12 @@ The repair management lifecycle is modeled through discrete operational stages:
 
 ### Lifecycle States
 1. **REQUESTED**: The customer submits a repair ticket specifying the device and problem description (*Implemented*).
-2. **ASSIGNED**: An administrator assigns an active technician to assess the device (*Route stubbed*).
-3. **ESTIMATE_PENDING**: The technician inspects the device and submits a formal repair cost estimate (*Route stubbed*).
-4. **APPROVED / REJECTED**: The owning customer reviews the cost estimate and accepts or rejects it (*Route stubbed*).
-5. **IN_PROGRESS**: The assigned technician initiates repair work following customer approval (*Route stubbed*).
-6. **COMPLETED**: The technician finishes repair work and closes the ticket (*Route stubbed*).
-7. **CANCELLED**: The customer terminates the request during permitted pre-work stages (*Route stubbed*).
+2. **ASSIGNED**: An administrator assigns an active technician to assess the device (*Handler stub; authorization not wired*).
+3. **ESTIMATE_PENDING**: The technician submits a formal repair cost estimate (*Handler stub; authorization not wired*).
+4. **APPROVED / REJECTED**: The customer accepts or rejects the cost estimate (*Handler stub; authorization not wired*).
+5. **IN_PROGRESS**: The assigned technician starts repair work after approval (*Handler stub; authorization not wired*).
+6. **COMPLETED**: The technician finishes repair work (*Handler stub; authorization not wired*).
+7. **CANCELLED**: The customer cancels the request during permitted pre-work stages (*Handler stub; authorization not wired*).
 
 ---
 
@@ -128,13 +128,13 @@ RepairOps/
 │   │   │   └── users/
 │   │   │       ├── user.model.js         # Mongoose schema for user accounts & roles
 │   │   │       └── user.service.js       # User service placeholder
-│   │   ├── app.js                   # Express application setup & middleware stack
-│   │   └── server.js                # Server entry point, DB bootstrap & shutdown
+│   │   └── app.js                   # Express application setup & middleware stack
 │   ├── tests/                       # Automated test directory (pending setup)
 │   ├── .env.example                 # Template for required environment variables
 │   ├── .gitignore                   # Excludes node_modules and local .env files
 │   ├── package.json                 # Project dependencies and npm scripts
-│   └── package-lock.json
+│   ├── package-lock.json
+│   └── server.js                    # Server entry point, DB bootstrap & shutdown
 └── docs/                            # Project design and architecture documentation
     ├── 00_PROJECT_OVERVIEW.md
     ├── 01_PHASE_1_REQUIREMENTS.md
@@ -146,7 +146,7 @@ RepairOps/
     ├── 07_PROJECT_STATUS.md
     ├── AI_CONTEXT.md
     ├── IMPLEMENTATION_TASKS.md
-    └── plan
+    └── plan/
 ```
 
 ---
@@ -188,17 +188,19 @@ Fill in the configuration parameters as described in the [Environment Variables]
 
 ### 5. Start the Server
 
+The current npm scripts refer to `src/server.js`, which does not exist. Until those scripts are corrected, run the root-level `server.js` directly:
+
 #### For Development (with live-reload via nodemon):
 ```bash
-npm run dev
+npx nodemon server.js
 ```
 
 #### For Production:
 ```bash
-npm start
+node server.js
 ```
 
-Once started, the server listens on the configured port (default: `5000`) and logs connection status:
+The server currently listens on port `5000`. It logs connection status:
 ```text
 FixFlow API listening on port 5000
 connect to database successfully
@@ -212,7 +214,7 @@ The application requires specific environment variables for configuration and se
 
 | Variable | Description | Example / Default |
 |---|---|---|
-| `PORT` | Port number on which the HTTP server listens | `5000` |
+| `PORT` | Read and validated by the server, but the current listener is hard-coded to port `5000` | `5000` |
 | `MONGO_URI` | MongoDB connection string URI | `mongodb://localhost:27017/repair_ops` |
 | `JWT_SECRET` | Secret key used for signing and verifying JWT tokens | `your_secure_random_jwt_secret` |
 
@@ -222,6 +224,28 @@ PORT=5000
 MONGO_URI=mongodb://localhost:27017/repair_ops
 JWT_SECRET=your_jwt_secret_key_here
 ```
+
+## Data and Content to Exclude from GitHub PRs
+
+Do not include real or sensitive data in a branch, commit, or pull request:
+
+- **Secrets and credentials**: local `.env` files, MongoDB connection strings containing credentials, JWT/session secrets, API keys, passwords, private keys, access tokens, and refresh tokens. Keep `.env.example` limited to clearly fake placeholders.
+- **Personal or customer information**: real names, email addresses, phone numbers, addresses, account details, or other identifying information.
+- **Real repair records and database exports**: MongoDB dumps, backups, production/staging database exports, and repair tickets that contain customer or device-owner information.
+- **Authentication material**: cookies, authorization headers, session data, and screenshots or logs that expose tokens or credentials.
+- **Local or generated files**: `node_modules`, temporary files, local logs, and editor-specific files unless a project change specifically requires them.
+
+Use synthetic, fictional values in API examples, tests, and screenshots. Share schemas, migrations, and sanitized sample data when they are needed to explain a change; verify that samples cannot identify a real person or expose a real device owner's information.
+
+Before committing or opening a PR, review the working-tree changes and the complete branch diff against the PR's target branch:
+
+```bash
+git status --short
+git diff HEAD
+git diff <target-branch>...HEAD
+```
+
+The backend `.gitignore` excludes local `.env` files and `node_modules`, but still review every PR diff. If a secret was committed or pushed, removing it in a later commit is not enough: revoke or rotate it and notify the repository owner.
 
 ---
 
@@ -241,7 +265,7 @@ The API is mounted under `/api` (`/api/auth` and `/api/repairs`). A health check
 |---|---|---|---|---|
 | `POST` | `/api/auth/register` | Public | Registers a new customer account, returns access token, sets refresh token cookie | Implemented |
 | `POST` | `/api/auth/login` | Public | Authenticates credentials, returns access token, sets refresh token cookie | Implemented |
-| `GET` | `/api/auth/get-me` | Bearer Token | Fetches current user profile (`name`, `email`, `role`) | Implemented |
+| `GET` | `/api/auth/get-me` | Bearer access token | Fetches current user profile (`name`, `email`, `role`) | Implemented |
 | `POST` | `/api/auth/refresh` | Cookie (`refreshToken`) | Rotates refresh token in DB and issues new access token | Implemented |
 | `POST` | `/api/auth/logout` | Cookie (`refreshToken`) | Revokes refresh session in DB and clears cookie | Implemented |
 
@@ -264,7 +288,7 @@ Content-Type: application/json
   "user": {
     "name": "Jane Doe",
     "email": "jane@example.com",
-    "accessToken": "eyJhbGciOiJIUzI1Ni..."
+    "accessToken": "<redacted>"
   }
 }
 ```
@@ -273,21 +297,23 @@ Content-Type: application/json
 
 | Method | Endpoint | Access | Description | Status |
 |---|---|---|---|---|
-| `POST` | `/api/repairs` | Customer (Bearer Token) | Creates a new repair request ticket | Implemented |
-| `GET` | `/api/repairs` | Customer (Bearer Token) | Fetch list of repairs | Controller stubbed |
-| `GET` | `/api/repairs/:id` | Authenticated | Read single repair request details | Route stubbed |
-| `POST` | `/api/repairs/:id/assign` | Admin | Assign technician to repair | Route stubbed |
-| `POST` | `/api/repairs/:id/estimate` | Technician | Submit repair cost estimate | Route stubbed |
-| `POST` | `/api/repairs/:id/estimate-response` | Customer | Approve or reject cost estimate | Route stubbed |
-| `POST` | `/api/repairs/:id/start` | Technician | Transition repair to in-progress | Route stubbed |
-| `POST` | `/api/repairs/:id/complete` | Technician | Mark repair as completed | Route stubbed |
-| `POST` | `/api/repairs/:id/cancel` | Customer | Cancel repair request | Route stubbed |
+| `POST` | `/api/repairs` | Customer (Bearer access token) | Creates a new repair request ticket | Implemented |
+| `GET` | `/api/repairs` | Customer (Bearer access token) | List repair requests | Incomplete; query/controller do not return repair records |
+| `GET` | `/api/repairs/:id` | No authentication middleware | Read one repair request | Handler stub; currently unprotected |
+| `POST` | `/api/repairs/:id/assign` | No authentication middleware | Assign technician to repair | Handler stub; currently unprotected |
+| `POST` | `/api/repairs/:id/estimate` | No authentication middleware | Submit repair cost estimate | Handler stub; currently unprotected |
+| `POST` | `/api/repairs/:id/estimate-response` | No authentication middleware | Approve or reject cost estimate | Handler stub; currently unprotected |
+| `POST` | `/api/repairs/:id/start` | No authentication middleware | Transition repair to in-progress | Handler stub; currently unprotected |
+| `POST` | `/api/repairs/:id/complete` | No authentication middleware | Mark repair as completed | Handler stub; currently unprotected |
+| `POST` | `/api/repairs/:id/cancel` | No authentication middleware | Cancel repair request | Handler stub; currently unprotected |
+
+> **Security note:** These lifecycle routes do not have authentication or role-authorization middleware wired in. Do not expose them for real use until access controls and handlers are implemented.
 
 #### Example: Create Repair Request
 **Request:**
 ```http
 POST /api/repairs
-Authorization: Bearer <access_token>
+Authorization: Bearer <access-token>
 Content-Type: application/json
 
 {
@@ -302,16 +328,16 @@ Content-Type: application/json
 {
   "message": "repair request created successfully",
   "repair": {
-    "_id": "6716a1b2c3d4e5f678901234",
-    "customerId": "6716a0f1c3d4e5f678901230",
+    "_id": "<synthetic-repair-id>",
+    "customerId": "<synthetic-customer-id>",
     "deviceType": "laptop",
     "brand": "Dell",
     "model": "XPS 15",
     "issueDescription": "Display flickering intermittently and overheating under load.",
     "status": "REQUESTED",
     "statusHistory": [],
-    "createdAt": "2026-10-21T18:30:00.000Z",
-    "updatedAt": "2026-10-21T18:30:00.000Z"
+    "createdAt": "<timestamp>",
+    "updatedAt": "<timestamp>"
   }
 }
 ```
@@ -321,17 +347,17 @@ Content-Type: application/json
 ## Error Handling & Security
 
 ### Error Handling
-- **Centralized Middleware**: Unhandled route errors are caught by `errorHandler.js` at the end of the Express middleware pipeline.
-- **Production Information Shielding**: Server errors (`500`) mask internal error details and return a generic `'Internal server error'` response.
+- **Centralized Middleware**: Errors passed to `errorHandler.js` are formatted by the middleware at the end of the Express pipeline. Some controllers handle errors directly, so response formats are not yet fully consistent.
+- **Production Information Shielding**: Errors handled by the middleware return a generic `Internal server error` message for server errors (`500`).
 - **Route Not Found Handling**: Unmatched paths return a `404` status with `{ "error": { "message": "Route not found" } }`.
 
 ### Security Implementations
 - **Credential Protection**: Passwords are saved exclusively as bcrypt hashes (10 rounds). Password hashes and secrets are never returned in user profile responses.
 - **Session Revocation via Hashed Tokens**: Refresh tokens are signed with JWT and stored in MongoDB only after SHA-256 hashing (`refreshTokenHash`). If the database is compromised, raw refresh tokens are not exposed.
-- **Cookie Hardening**: Refresh tokens are transported via `httpOnly`, `secure`, `sameSite: "strict"` cookies, mitigating cross-site scripting (XSS) and cross-site request forgery (CSRF).
+- **Cookie Hardening**: Refresh tokens use `httpOnly`, `secure`, and `sameSite: "strict"` cookie options. `httpOnly` prevents browser JavaScript from reading the cookie; `secure` limits it to HTTPS; `sameSite` helps reduce cross-site request forgery (CSRF).
 - **Strict Role Boundaries**: Public registration does not permit role escalation; all newly registered users default to the `customer` role.
 - **Field Whitelisting**: The `validateCreateRepair` validator explicitly blocks unexpected or prohibited fields from being passed in request bodies.
-- **Protected Environment Variables**: Startup checks ensure credentials and secrets are loaded before incoming traffic is served, while `.gitignore` prevents `.env` from being committed to source control.
+- **Environment Variable Checks**: Startup requires `MONGO_URI` and `JWT_SECRET`. The backend `.gitignore` excludes local `.env` files, but changes should still be reviewed before committing.
 
 ---
 
@@ -339,7 +365,8 @@ Content-Type: application/json
 
 The following items are identified from the design documentation and codebase for ongoing development:
 
-- **Complete Repair Lifecycle Logic**: Implement business logic for assignment, technician estimates, customer approval/rejection, repair execution, completion, and cancellation in `repair.service.js` and `repair.controller.js`.
+- **Complete Repair Lifecycle Logic**: Implement business logic for listing, assignment, technician estimates, customer approval/rejection, repair execution, completion, and cancellation in `repair.service.js` and `repair.controller.js`.
+- **Repair Route Security**: Add authentication and role-based authorization to every repair lifecycle route before implementing or exposing those actions.
 - **Role-Based Authorization Expansion**: Implement dedicated middlewares for `authorizedAdmin` and `authorizedTechnician` to secure assignment and technician workflow routes.
 - **State Transition Guardrails**: Enforce strict server-side state machine validation to ensure repair status updates only follow valid lifecycle transitions.
 - **Automated Testing Suite**: Establish integration and unit test suites for API routes using an isolated testing database.
@@ -354,4 +381,3 @@ The following items are identified from the design documentation and codebase fo
 - **Repository**: [https://github.com/GaganNagar/RepairOps.git](https://github.com/GaganNagar/RepairOps.git)
 - **Author**: Gagan Nagar (`GaganNagar`)
 - **Documentation**: Located in the [`docs/`](./docs) directory for architectural specifications and task roadmaps.
-
